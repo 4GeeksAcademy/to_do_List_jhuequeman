@@ -1,81 +1,85 @@
-import { useEffect, useState } from 'react';
-import './App.css';
+import { useEffect, useState } from "react";
+import "./App.css";
 import { RiChatDeleteLine } from "react-icons/ri";
 
 function App() {
   const [inputValue, setInputValue] = useState("");
   const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true); // nuevo estado para mostrar "Cargando..."
 
-  const tareasdeFetch = ()=>{
-    fetch("https://playground.4geeks.com/todo/users/jhuequeman",{
+  const tareasdeFetch = () => {
+    setLoading(true);
+    fetch("https://playground.4geeks.com/todo/users/jhuequeman", {
       method: "GET",
-      headers:{
-        "Content-Type": "application/json"
-      }
-    })  .then((Response)=> {
-        if(!Response.ok){
+      headers: { "Content-Type": "application/json" },
+    })
+      .then((res) => {
+        if (!res.ok) {
+          // si no existe el usuario, lo crea y reintenta
           return crearUsuario().then(() => tareasdeFetch());
+        }
+        return res.json();
+      })
+      .then((data) => {
+        setTasks(data.todos || []);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.log("Error al obtener tareas:", error);
+        setLoading(false);
+      });
+  };
 
-    }
-        return Response.json();
+  const crearUsuario = () => {
+    return fetch("https://playground.4geeks.com/todo/users/jhuequeman", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "jhuequeman" }),
     })
-        .then((data)=> setTasks(data.todos))
-        .catch((error) => console.log(error));
-  
-  }
+      .then((res) => res.json())
+      .then((data) => console.log("Usuario creado:", data))
+      .catch((error) => console.error("Error al crear usuario:", error));
+  };
 
-    const crearUsurio = ()=>{
-      fetch("https://playground.4geeks.com/todo/users/jhuequeman",{
-        method :"POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body:JSON.stringify({name:"jhuequeman"})
-
-      }) .then((res)=> res.json())
-         .then((data) =>console.log("usuario creado",data))
-         .catch((error)=> console.error("error",error))
-      
-    }
-
-    const agregarTarea = (label)=>{
-      fetch("https://playground.4geeks.com/todo/users/jhuequeman",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({label, is_done: "false"})
+  const agregarTarea = (label) => {
+    fetch("https://playground.4geeks.com/todo/todos/jhuequeman", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, is_done: false }),
+    })
+      .then((res) => res.json())
+      .then(() => {
+        // Espera un poco y luego recarga las tareas
+        setTimeout(() => tareasdeFetch(), 500);
       })
-      
-      .then((res)=> res.json())
-      .then((data)=>{
-        const nuevaTarea = {id:data.id,label}
-        setTasks([... tasks,nuevaTarea]);
-      })
-      .catch((error)=> console.error("error",error));
-      
+      .catch((error) => console.error("Error al agregar tarea:", error));
+  };
 
-    }
-
-      const eliminarTarea = (id, index) => {
+  const eliminarTarea = (id) => {
     fetch(`https://playground.4geeks.com/todo/todos/${id}`, {
-      method: "DELETE"
+      method: "DELETE",
     })
-    .then(res => {
-      if (!res.ok) throw new Error("No se pudo eliminar la tarea");
-      const nuevasTareas = tasks.filter((_, i) => i !== index);
-      setTasks(nuevasTareas);
-    })
-    .catch(err => console.log("Error al eliminar tarea:", err));
+      .then((res) => {
+        if (!res.ok) throw new Error("No se pudo eliminar la tarea");
+        // Espera un poco y luego recarga las tareas
+        setTimeout(() => tareasdeFetch(), 500);
+      })
+      .catch((err) => console.log("Error al eliminar tarea:", err));
   };
 
-  useEffect(()=>{
-    tareasdeFetch();
-  }, [])
-  
-  
+  useEffect(() => {
+    tareasdeFetch(); // primera carga
 
-  const handleChange = (e) => {
-    setInputValue(e.target.value);
-  };
+    // 🔁 actualiza cada 5 segundos automáticamente
+    const intervalId = setInterval(() => {
+      tareasdeFetch();
+    }, 5000);
+
+    // limpiar intervalo al desmontar el componente
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const handleChange = (e) => setInputValue(e.target.value);
 
   const handleAddTask = (e) => {
     if (e.key === "Enter" && inputValue.trim() !== "") {
@@ -84,16 +88,8 @@ function App() {
     }
   };
 
-  const deletetodo = (index)=>{
-    const tarea = tasks[index];
-    if(tarea.id){
-         eliminarTarea(tarea.id,index)
-    }
-    
-  }
-
   return (
-    <div className='container'>
+    <div className="container">
       <h1>Todos</h1>
 
       <input
@@ -101,17 +97,27 @@ function App() {
         onChange={handleChange}
         onKeyDown={handleAddTask}
         value={inputValue}
-        placeholder='Ingresa tarea'
+        placeholder="Ingresa tarea"
       />
 
-      <ul>
-        {tasks.map((t, index) => (
-          <li key={index}>
-            {t.label} <RiChatDeleteLine  onClick={()=>{deletetodo(index)}} className='btn-delete' />
-          </li>
-        ))}
+      {loading ? (
+        <p>Cargando tareas...</p>
+      ) : tasks.length === 0 ? (
+        <p>No hay tareas todavía 😴</p>
+      ) : (
+        <ul>
+          {tasks.map((t) => (
+            <li key={t.id}>
+              {t.label}
+              <RiChatDeleteLine
+                onClick={() => eliminarTarea(t.id)}
+                className="btn-delete"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
 
-      </ul>
       <div>Tareas: {tasks.length}</div>
     </div>
   );
